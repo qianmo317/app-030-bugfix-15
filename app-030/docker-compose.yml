@@ -1,0 +1,16 @@
+services:
+  app-030:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: app-030-bugfix-15:latest
+    container_name: app-030-bugfix-15
+    restart: unless-stopped
+    ports:
+      - "8250:80"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/healthz"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s

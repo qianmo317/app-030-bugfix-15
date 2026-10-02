@@ -1,0 +1,104 @@
+[
+  {
+    "version": "v1.0.0",
+    "label": "初版：5cm 号档 + 胸腰差型别（边界归上）",
+    "builtin": true,
+    "heightStepCm": 5,
+    "heightAnchor": 155,
+    "chestStepCm": 4,
+    "chestAnchor": 84,
+    "boundaryRule": "round_up",
+    "fitByChestWaistDiff": [
+      {
+        "gender": "male",
+        "ranges": [
+          { "fit": "Y", "minCm": 17, "maxCm": 22 },
+          { "fit": "A", "minCm": 12, "maxCm": 16 },
+          { "fit": "B", "minCm": 7, "maxCm": 11 },
+          { "fit": "C", "minCm": 2, "maxCm": 6 }
+        ]
+      },
+      {
+        "gender": "female",
+        "ranges": [
+          { "fit": "Y", "minCm": 19, "maxCm": 24 },
+          { "fit": "A", "minCm": 14, "maxCm": 18 },
+          { "fit": "B", "minCm": 9, "maxCm": 13 },
+          { "fit": "C", "minCm": 4, "maxCm": 8 }
+        ]
+      }
+    ],
+    "specialFlags": [
+      { "code": "PLUS", "label": "加肥加大" },
+      { "code": "CUSTOM", "label": "特体定制" },
+      { "code": "TALL", "label": "超高定制" }
+    ],
+    "heightRangeCm": { "minCm": 140, "maxCm": 215 },
+    "chestRangeCm": { "minCm": 60, "maxCm": 140 },
+    "estimate": {
+      "standardWeightBaseCm": 100,
+      "maleWeightFactor": 0.9,
+      "femaleWeightFactor": 0.85,
+      "maleChestRatio": 0.52,
+      "femaleChestRatio": 0.5,
+      "maleBmiRef": 21,
+      "femaleBmiRef": 20,
+      "bmiChestFactor": 1.5,
+      "maleDefaultDiffCm": 14,
+      "femaleDefaultDiffCm": 16
+    },
+    "effectiveFrom": "2023-01-01",
+    "note": "男装胸腰差 Y 17~22 / A 12~16 / B 7~11 / C 2~6，女装各档整体上移。"
+  },
+  {
+    "version": "v1.1.0",
+    "label": "2024 修订：女装型别区间上移 1cm（边界规则不变）",
+    "builtin": true,
+    "heightStepCm": 5,
+    "heightAnchor": 155,
+    "chestStepCm": 4,
+    "chestAnchor": 84,
+    "boundaryRule": "round_up",
+    "fitByChestWaistDiff": [
+      {
+        "gender": "male",
+        "ranges": [
+          { "fit": "Y", "minCm": 17, "maxCm": 22 },
+          { "fit": "A", "minCm": 12, "maxCm": 16 },
+          { "fit": "B", "minCm": 7, "maxCm": 11 },
+          { "fit": "C", "minCm": 2, "maxCm": 6 }
+        ]
+      },
+      {
+        "gender": "female",
+        "ranges": [
+          { "fit": "Y", "minCm": 20, "maxCm": 25 },
+          { "fit": "A", "minCm": 14, "maxCm": 19 },
+          { "fit": "B", "minCm": 9, "maxCm": 13 },
+          { "fit": "C", "minCm": 4, "maxCm": 8 }
+        ]
+      }
+    ],
+    "specialFlags": [
+      { "code": "PLUS", "label": "加肥加大" },
+      { "code": "CUSTOM", "label": "特体定制" },
+      { "code": "TALL", "label": "超高定制" }
+    ],
+    "heightRangeCm": { "minCm": 140, "maxCm": 215 },
+    "chestRangeCm": { "minCm": 60, "maxCm": 140 },
+    "estimate": {
+      "standardWeightBaseCm": 100,
+      "maleWeightFactor": 0.9,
+      "femaleWeightFactor": 0.85,
+      "maleChestRatio": 0.52,
+      "femaleChestRatio": 0.5,
+      "maleBmiRef": 21,
+      "femaleBmiRef": 20,
+      "bmiChestFactor": 1.5,
+      "maleDefaultDiffCm": 14,
+      "femaleDefaultDiffCm": 16
+    },
+    "effectiveFrom": "2024-03-01",
+    "note": "女装胸腰差 Y 20~25 / A 14~19 / B 9~13 / C 4~8；男装区间未变。"
+  }
+]

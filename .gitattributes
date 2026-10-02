@@ -1,0 +1,5 @@
+# ---- 本文件由 cc-pairwise/new_question_repo.py 生成（建仓九步第 2 步）----
+# 两个容器（A/B）与宿主机必须看到**逐字节相同**的起点；Windows 的 core.autocrlf=true
+# 会在 checkout/add 时改写行尾，而容器里的 git 不做同样的改写，于是同一份文件
+# 在两边一个是「干净」一个是「modified」。这里统一按 LF 物化，与平台设置无关。
+* text=auto eol=lf

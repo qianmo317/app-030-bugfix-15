@@ -1,0 +1,47 @@
+# ---- 本文件由 cc-pairwise/new_question_repo.py 生成（建仓九步第 2 步）----
+# ---- 只做通用兜底；素材源自身的 .gitignore 优先，本文件只在缺失时生成 ----
+
+# OS 文件
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 编辑器 / IDE
+.idea/
+.vscode/
+*.swp
+
+# 依赖目录
+node_modules/
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+target/
+vendor/
+
+# 构建产物
+dist/
+build/
+out/
+*.egg-info/
+bin/
+*.exe
+*.test
+
+# 环境文件（密钥绝不进仓库）
+.env
+.env.*
+*.local
+
+# 日志
+*.log
+logs/
+npm-debug.log*
+yarn-error.log*
+
+# Node（识别到 package.json）
+.npm/
+.pnpm-store/
+*.tsbuildinfo
