@@ -314,7 +314,8 @@ export function createPersonFromDraft(draft: PersonDraft, rule: SizeRule, duplic
     sourceRow: draft.sourceRow,
     source: draft.source,
     result: null,
-    createdAt: Date.now()
+    createdAt: Date.now(),
+    rev: 1
   }
 }
 
@@ -352,6 +353,7 @@ export function applyImport(project: Project, dryRun: DryRun, rule: SizeRule): A
         existing.possibleDuplicateOf = created.possibleDuplicateOf
         existing.sourceRow = created.sourceRow
         existing.result = null
+        existing.rev = (existing.rev ?? 0) + 1
         result.updated += 1
         continue
       }

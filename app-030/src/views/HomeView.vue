@@ -68,7 +68,13 @@ async function remove(project: Project): Promise<void> {
   if (!window.confirm(`确认删除项目「${project.name}」及其 ${project.persons.length} 条量体数据？此操作不可恢复。`)) {
     return
   }
-  await deleteProject(project.id)
+  try {
+    // 删除是项目记录 + 墓碑同一事务落盘；失败时列表项会自动恢复并明确报错
+    await deleteProject(project.id)
+    message.value = `项目「${project.name}」已从本机删除`
+  } catch (error) {
+    errorText.value = `删除失败，数据仍保留在本机：${error instanceof Error ? error.message : String(error)}`
+  }
 }
 
 function formatTime(value: number): string {

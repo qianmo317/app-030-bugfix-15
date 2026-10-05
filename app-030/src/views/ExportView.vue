@@ -1,7 +1,14 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useRoute } from 'vue-router'
-import { ensureMerged, flushProject, getProject, getRule, store } from '../logic/store'
+import {
+  ensureMerged,
+  flushProject,
+  getProject,
+  getRule,
+  isRuleAvailable,
+  store
+} from '../logic/store'
 import { buildSummary, conservationText } from '../logic/merge'
 import {
   buildOrderSheet,
@@ -21,7 +28,12 @@ import { chestWaistDiffCm, formatCm } from '../logic/precision'
 
 const route = useRoute()
 const project = computed(() => getProject(route.params.id as string))
-const rule = computed(() => getRule(project.value?.ruleVersion ?? store.rules[0].version))
+const rule = computed(() => {
+  const current = project.value
+  if (!current) return getRule(undefined)
+  return getRule(current.ruleVersion)
+})
+const ruleVersionMismatch = computed(() => !!project.value && !isRuleAvailable(project.value.ruleVersion))
 
 if (project.value) ensureMerged(project.value)
 
@@ -48,11 +60,26 @@ const orderSheet = computed(() => {
 
 const blocked = computed(() => !summary.value?.conserved)
 
+/**
+ * 导出前置：重新归并并强制立即落盘。
+ * 落盘失败必须阻止导出并报错——否则会出现“文件导出来了、刷新后最后几条没了”。
+ */
 async function prepare(): Promise<boolean> {
   const current = project.value
   if (!current) return false
+  if (ruleVersionMismatch.value) {
+    message.value = `项目锁定的规则版本 ${current.ruleVersion} 在本机不存在，已阻止导出，请先恢复规则版本`
+    return false
+  }
   ensureMerged(current)
-  await flushProject(current)
+  try {
+    await flushProject(current)
+  } catch (error) {
+    message.value = `最后几条数据未能写入本机，已阻止导出：${
+      error instanceof Error ? error.message : String(error)
+    }；请重试后再导出`
+    return false
+  }
   return true
 }
 
@@ -133,6 +160,15 @@ const genderText = (gender: string): string => (gender === 'male' ? '男' : '女
       </div>
     </div>
 
+    <div v-if="ruleVersionMismatch" class="card card-accent-danger no-print">
+      <div class="card-body">
+        <p class="notice notice-error">
+          项目锁定的规则版本 <b>{{ project.ruleVersion }}</b> 在本机不存在，当前按 {{ rule.version }} 显示，
+          导出已被阻止。请回到「号型规则」恢复对应版本后再导出。
+        </p>
+      </div>
+    </div>
+
     <div v-if="blocked" class="card card-accent-danger no-print">
       <div class="card-head">
         <h2>守恒校验未通过，导出已被阻止</h2>
@@ -183,11 +219,11 @@ const genderText = (gender: string): string => (gender === 'male' ? '男' : '女
       </div>
       <div class="card-body">
         <div class="toolbar">
-          <button class="btn btn-primary" type="button" :disabled="blocked" @click="exportOrderXlsx">
+          <button class="btn btn-primary" type="button" :disabled="blocked || ruleVersionMismatch" @click="exportOrderXlsx">
             下单汇总表（Excel）
           </button>
-          <button class="btn" type="button" :disabled="blocked" @click="exportOrderCsv">下单汇总表（CSV）</button>
-          <button class="btn btn-accent" type="button" :disabled="blocked" @click="printPreview">
+          <button class="btn" type="button" :disabled="blocked || ruleVersionMismatch" @click="exportOrderCsv">下单汇总表（CSV）</button>
+          <button class="btn btn-accent" type="button" :disabled="blocked || ruleVersionMismatch" @click="printPreview">
             打印预览 / 另存为 PDF
           </button>
           <div class="spacer"></div>

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { flushProject, getProject, getRule, store } from '../logic/store'
+import { flushProject, getProject, getRule } from '../logic/store'
 import {
   EMPTY_MAPPING,
   IMPORT_FIELDS,
@@ -20,7 +20,11 @@ import { isXlsxFile, readXlsxRows } from '../logic/xlsx'
 
 const route = useRoute()
 const project = computed(() => getProject(route.params.id as string))
-const rule = computed(() => getRule(project.value?.ruleVersion ?? store.rules[0].version))
+const rule = computed(() => {
+  const current = project.value
+  if (!current) return getRule(undefined)
+  return getRule(current.ruleVersion)
+})
 
 const fileInput = ref<HTMLInputElement | null>(null)
 const fileName = ref('')
@@ -192,7 +196,15 @@ async function confirmImport(): Promise<void> {
     importParseMs: preview.durationMs,
     importRows: preview.counts.total
   }
-  await flushProject(current)
+  try {
+    // 导入完成是关键节点：强制立即落盘，成功后才提示完成
+    await flushProject(current)
+  } catch (error) {
+    fileError.value = `导入数据未能写入本机：${
+      error instanceof Error ? error.message : String(error)
+    }；数据保留在当前页面，请重试，不要直接关闭标签页`
+    return
+  }
   resultText.value = `导入完成：新增 ${applied.added} 条、更新 ${applied.updated} 条、无效（待确认）${applied.invalid} 条、跳过错误行 ${applied.skipped} 条；文件指纹 ${preview.fingerprint} 已登记，重传同一文件不会重复写入。`
   dryRun.value = null
 }

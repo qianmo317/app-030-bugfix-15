@@ -590,6 +590,16 @@ table.data-table tr.row-highlight td {
   color: #1b4a72;
 }
 
+.notice-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  position: sticky;
+  top: 8px;
+  z-index: 20;
+  margin-bottom: 10px;
+}
+
 .empty {
   padding: 26px 14px;
   text-align: center;

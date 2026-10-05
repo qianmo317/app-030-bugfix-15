@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink, RouterView, useRoute } from 'vue-router'
-import { getProject, initStore, setOperator, store } from './logic/store'
+import { getProject, dismissStoreNotice, initStore, setOperator, store, storeNotices } from './logic/store'
 
 const route = useRoute()
 const operatorDraft = ref(store.operator)
@@ -77,6 +77,10 @@ async function commitOperator(): Promise<void> {
     <main class="container">
       <div v-if="!store.ready" class="empty">正在读取本机数据…</div>
       <template v-else>
+        <div v-for="notice in storeNotices.items" :key="notice.id" class="notice-banner">
+          <span class="notice notice-warn" style="flex: 1">{{ notice.text }}</span>
+          <button class="btn btn-sm" type="button" @click="dismissStoreNotice(notice.id)">知道了</button>
+        </div>
         <p v-if="store.error" class="notice notice-error">
           本机存储不可用：{{ store.error }}（数据将无法离线保存，请检查浏览器隐私设置）
         </p>

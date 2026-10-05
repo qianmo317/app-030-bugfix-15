@@ -9,7 +9,11 @@ import type { Gender } from '../logic/types'
 
 const route = useRoute()
 const project = computed(() => getProject(route.params.id as string))
-const rule = computed(() => getRule(project.value?.ruleVersion ?? store.rules[0].version))
+const rule = computed(() => {
+  const current = project.value
+  if (!current) return getRule(undefined)
+  return getRule(current.ruleVersion)
+})
 
 if (project.value) ensureMerged(project.value)
 

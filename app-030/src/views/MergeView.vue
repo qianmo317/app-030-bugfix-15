@@ -1,7 +1,16 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
-import { ensureMerged, flushProject, getProject, getRule, persistProject, store } from '../logic/store'
+import { onBeforeRouteLeave, useRoute } from 'vue-router'
+import {
+  bumpPersonRev,
+  ensureMerged,
+  flushProject,
+  getProject,
+  getRule,
+  isRuleAvailable,
+  persistProject,
+  store
+} from '../logic/store'
 import { buildSummary, conservationText } from '../logic/merge'
 import { alignToStep, isSizeCodeValid, normalizeSizeCodeInput, specialFlagLabel } from '../logic/sizeRules'
 import { chestWaistDiffCm, cmToHalfUnits, formatCm, formatHalfUnits } from '../logic/precision'
@@ -9,12 +18,28 @@ import type { Person, PersonStatus } from '../logic/types'
 
 const route = useRoute()
 const project = computed(() => getProject(route.params.id as string))
-const rule = computed(() => getRule(project.value?.ruleVersion ?? store.rules[0].version))
+const rule = computed(() => {
+  const current = project.value
+  if (!current) return getRule(undefined)
+  return getRule(current.ruleVersion)
+})
+const ruleVersionMismatch = computed(() => !!project.value && !isRuleAvailable(project.value.ruleVersion))
 
 if (project.value) ensureMerged(project.value)
 
 onMounted(() => {
-  if (project.value) void flushProject(project.value)
+  if (project.value) void persistProject(project.value, false)
+})
+
+// 离开归并页前把覆写 / 状态变更强制落盘
+onBeforeRouteLeave(async () => {
+  if (project.value) {
+    try {
+      await flushProject(project.value)
+    } catch {
+      // 错误已通过全局告警条提示
+    }
+  }
 })
 
 const summary = computed(() => (project.value ? buildSummary(project.value, rule.value) : null))
@@ -201,10 +226,15 @@ async function submitOverride(): Promise<void> {
       at: Date.now()
     }
   }
+  bumpPersonRev(target)
   ensureMerged(current)
-  persistProject(current, true)
-  message.value = `已将「${target.name}」的号型覆写为 ${code}（原因：${overrideForm.reason.trim()}），覆写只改号型归属，不改人数`
-  overrideTarget.value = null
+  try {
+    await persistProject(current, true)
+    message.value = `已将「${target.name}」的号型覆写为 ${code}（原因：${overrideForm.reason.trim()}），覆写只改号型归属，不改人数`
+    overrideTarget.value = null
+  } catch (error) {
+    errorText.value = `覆写未保存到本机：${error instanceof Error ? error.message : String(error)}，请重试`
+  }
 }
 
 async function revertOverride(person: Person): Promise<void> {
@@ -217,9 +247,14 @@ async function revertOverride(person: Person): Promise<void> {
     fit: person.result.fit,
     ruleVersion: rule.value.version
   }
+  bumpPersonRev(person)
   ensureMerged(current)
-  persistProject(current, true)
-  message.value = `已撤销「${person.name}」的覆写（原覆写：${override.sizeCode}，操作人 ${override.by}）`
+  try {
+    await persistProject(current, true)
+    message.value = `已撤销「${person.name}」的覆写（原覆写：${override.sizeCode}，操作人 ${override.by}）`
+  } catch (error) {
+    errorText.value = `撤销未保存到本机：${error instanceof Error ? error.message : String(error)}，请重试`
+  }
 }
 
 /* ------------------------------ 行状态处理 ------------------------------ */
@@ -229,12 +264,17 @@ async function setSpecial(person: Person, code: string): Promise<void> {
   if (!current) return
   person.specialFlag = code === '' ? null : code
   person.needsConfirm = false
+  bumpPersonRev(person)
   ensureMerged(current)
-  persistProject(current, true)
-  message.value =
-    code === ''
-      ? `已取消「${person.name}」的特殊体型标记`
-      : `已将「${person.name}」标记为${specialFlagLabel(rule.value, code)}，单列进定制清单，不混入常规档`
+  try {
+    await persistProject(current, true)
+    message.value =
+      code === ''
+        ? `已取消「${person.name}」的特殊体型标记`
+        : `已将「${person.name}」标记为${specialFlagLabel(rule.value, code)}，单列进定制清单，不混入常规档`
+  } catch (error) {
+    errorText.value = `修改未保存到本机：${error instanceof Error ? error.message : String(error)}，请重试`
+  }
 }
 
 async function setStatus(person: Person, status: PersonStatus, reason: string): Promise<void> {
@@ -243,12 +283,17 @@ async function setStatus(person: Person, status: PersonStatus, reason: string): 
   person.status = status
   person.statusReason = status === 'active' ? '' : reason
   if (status !== 'active') person.result = null
+  bumpPersonRev(person)
   ensureMerged(current)
-  persistProject(current, true)
-  message.value =
-    status === 'active'
-      ? `已恢复「${person.name}」为有效行（重新计入有效人数）`
-      : `已将「${person.name}」标记为${status === 'duplicate' ? '重复行并排除' : '无效行并排除'}，不计入有效人数`
+  try {
+    await persistProject(current, true)
+    message.value =
+      status === 'active'
+        ? `已恢复「${person.name}」为有效行（重新计入有效人数）`
+        : `已将「${person.name}」标记为${status === 'duplicate' ? '重复行并排除' : '无效行并排除'}，不计入有效人数`
+  } catch (error) {
+    errorText.value = `状态修改未保存到本机：${error instanceof Error ? error.message : String(error)}，请重试`
+  }
 }
 
 async function clearDuplicateFlag(person: Person): Promise<void> {
@@ -256,8 +301,13 @@ async function clearDuplicateFlag(person: Person): Promise<void> {
   if (!current) return
   person.possibleDuplicateOf = null
   if (!person.anomaly.length) person.needsConfirm = false
-  persistProject(current, true)
-  message.value = `已确认「${person.name}」不是重复行，标记已清除（数据未改动）`
+  bumpPersonRev(person)
+  try {
+    await persistProject(current, true)
+    message.value = `已确认「${person.name}」不是重复行，标记已清除（数据未改动）`
+  } catch (error) {
+    errorText.value = `修改未保存到本机：${error instanceof Error ? error.message : String(error)}，请重试`
+  }
 }
 
 const genderText = (gender: string): string => (gender === 'male' ? '男' : '女')
@@ -268,6 +318,9 @@ const rowLabel = (sizeCode: string, isSpecial: boolean): string =>
 <template>
   <section v-if="!project || !summary" class="empty">项目不存在，请回到项目列表重新选择。</section>
   <section v-else>
+    <p v-if="ruleVersionMismatch" class="notice notice-warn">
+      项目锁定的规则版本 {{ project.ruleVersion }} 在本机不存在，当前按 {{ rule.version }} 归并，结果可能与原口径不一致，请勿据此导出下单。
+    </p>
     <div class="page-head">
       <div>
         <h1>{{ project.name }} · 归并结果与人工覆写</h1>

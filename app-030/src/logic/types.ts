@@ -91,6 +91,8 @@ export type Person = {
   source: 'manual' | 'import'
   result: PersonResult | null
   createdAt: number
+  /** 单条记录的修订号：同一项目在多个标签页同时改时按它做行级合并 */
+  rev?: number
 }
 
 export type ImportRecord = {
@@ -116,6 +118,16 @@ export type Project = {
   perf?: { mergeMs?: number; mergeCount?: number; importParseMs?: number; importRows?: number }
   createdAt: number
   updatedAt: number
+  /**
+   * 项目修订号（last-writer-wins 用）：每次本机写入 +1。
+   * 另一标签页若按过期 rev 提交，会被 compare-and-swap 拦下并改为行级合并。
+   */
+  rev?: number
 }
+
+/** 删除墓碑：防止 A 标签页删除后，B 标签页持有的旧快照把数据写回来 */
+export type PersonTombstone = { personId: string; projectId: string; at: number }
+
+export type ProjectTombstone = { projectId: string; at: number }
 
 export type SummaryRow = { sizeCode: string; gender: Gender; qty: number; isSpecial: boolean }

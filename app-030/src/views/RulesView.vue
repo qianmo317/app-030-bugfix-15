@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
 import { getRule, projectsUsingRule, saveRule, store } from '../logic/store'
-import { alignToStep } from '../logic/sizeRules'
+import { BUILTIN_RULES, alignToStep } from '../logic/sizeRules'
 import { cmToHalfUnits, formatHalfUnits } from '../logic/precision'
 import type { FitRange, Gender, SizeRule } from '../logic/types'
 
@@ -9,8 +9,9 @@ function cloneRule(rule: SizeRule): SizeRule {
   return JSON.parse(JSON.stringify(rule)) as SizeRule
 }
 
-const selectedVersion = ref(store.rules[0]?.version ?? '')
-const form = ref<SizeRule>(cloneRule(getRule(selectedVersion.value)))
+const fallbackRule: SizeRule = store.rules[0] ?? BUILTIN_RULES[0]
+const selectedVersion = ref(store.rules[0]?.version ?? fallbackRule.version)
+const form = ref<SizeRule>(cloneRule(getRule(selectedVersion.value) ?? fallbackRule))
 
 const newVersion = reactive({ version: '', label: '', effectiveFrom: '' })
 const errorText = ref('')

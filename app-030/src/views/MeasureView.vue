@@ -1,7 +1,15 @@
 <script setup lang="ts">
 import { computed, nextTick, reactive, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
-import { flushProject, getProject, getRule, persistProject, store } from '../logic/store'
+import { onBeforeRouteLeave, useRoute } from 'vue-router'
+import {
+  bumpPersonRev,
+  deletePerson,
+  flushProject,
+  getProject,
+  getRule,
+  isRuleAvailable,
+  persistProject
+} from '../logic/store'
 import { analyzeDraft, findDuplicateIds, makePersonId, type PersonDraft } from '../logic/analyze'
 import { estimateInitialSize, type EstimateResult } from '../logic/estimate'
 import { formatCm, parseLengthCm, parseWeightKg } from '../logic/precision'
@@ -12,7 +20,15 @@ import type { Gender, Person } from '../logic/types'
 
 const route = useRoute()
 const project = computed(() => getProject(route.params.id as string))
-const rule = computed(() => getRule(project.value?.ruleVersion ?? store.rules[0].version))
+const rule = computed(() => {
+  const current = project.value
+  if (!current) return getRule(undefined)
+  return getRule(current.ruleVersion)
+})
+const ruleVersionMismatch = computed(() => {
+  const current = project.value
+  return !!current && !isRuleAvailable(current.ruleVersion)
+})
 
 const formRef = ref<HTMLFormElement | null>(null)
 const heightRef = ref<HTMLInputElement | null>(null)
@@ -35,6 +51,7 @@ const notice = ref('')
 const warnText = ref('')
 const savedCount = ref(0)
 const saving = ref(false)
+const pendingWrites = ref(0)
 
 watch(
   project,
@@ -165,14 +182,29 @@ async function save(): Promise<void> {
     createdAt: Date.now()
   }
   current.persons.push(person)
+  bumpPersonRev(person)
   sticky.orgUnit = person.orgUnit
   sticky.gender = person.gender
   sticky.batch = person.batch
   savedCount.value += 1
   resetForm()
-  persistProject(current, true)
+  // 连续录入：200ms 停顿后合并落盘。界面立即响应不阻塞下一条，
+  // 但“已保存”只在事务真正提交后才出现；写入失败如实报错并保留本条在内存。
+  const ordinal = current.persons.length
+  pendingWrites.value += 1
+  persistProject(current, false)
+    .then(() => {
+      notice.value = `第 ${ordinal} 条（${person.name}）已写入本机 IndexedDB，断网也不丢`
+    })
+    .catch((error: unknown) => {
+      warnText.value = `写入本机失败：${
+        error instanceof Error ? error.message : String(error)
+      }；本条仍保留在当前页面，请稍后重试或点“导出 CSV（兜底）”，不要直接关闭标签页`
+    })
+    .finally(() => {
+      pendingWrites.value -= 1
+    })
   saving.value = false
-  notice.value = `第 ${current.persons.length} 条（${person.name}）已保存到本机 IndexedDB，断网也不丢`
   if (outcome.status === 'invalid') {
     warnText.value = `已拦截：${outcome.statusReason}；该行记为无效行，不计入有效人数，可在归并页复核`
   } else if (outcome.messages.length > 0) {
@@ -187,15 +219,32 @@ async function save(): Promise<void> {
 async function removePerson(person: Person): Promise<void> {
   const current = project.value
   if (!current) return
-  current.persons = current.persons.filter((item) => item.id !== person.id)
-  persistProject(current, true)
-  notice.value = `已删除「${person.name}」`
+  try {
+    // 删除立即落盘：墓碑与项目快照同一事务提交，刷新或其它标签页都不会让此人复活
+    await deletePerson(current, person.id)
+    notice.value = `已删除「${person.name}」并写入本机`
+  } catch (error) {
+    notice.value = ''
+    warnText.value = `删除未写入本机：${error instanceof Error ? error.message : String(error)}，请重试`
+  }
 }
+
+// 离开录入页（去导入 / 归并 / 首页）前必须立即落盘，防抖窗口内的最后几条不能丢
+onBeforeRouteLeave(async () => {
+  if (project.value) {
+    try {
+      await flushProject(project.value)
+    } catch {
+      // 失败提示已在全局告警条给出；不阻断跳转，页面隐藏时还会再兜底一次
+    }
+  }
+})
 
 async function exportFallbackCsv(): Promise<void> {
   const current = project.value
   if (!current) return
   runMerge(current, rule.value)
+  // 导出前强制立即落盘，导出的内容与本机磁盘一致
   await flushProject(current)
   const rows = detailRows({ project: current, rule: rule.value })
   downloadText(
@@ -217,6 +266,10 @@ function genderText(gender: Gender): string {
 <template>
   <section v-if="!project" class="empty">项目不存在，请回到项目列表重新选择。</section>
   <section v-else>
+    <p v-if="ruleVersionMismatch" class="notice notice-warn">
+      本项目锁定的规则版本 {{ project.ruleVersion }} 在本机不存在（可能已被删除或浏览器数据被清空），
+      当前暂按 {{ rule.version }} 显示，归并结果可能与原口径不一致；请回到「号型规则」恢复对应版本后再导出。
+    </p>
     <div class="page-head">
       <div>
         <h1>{{ project.name }} · 量体录入</h1>
@@ -380,6 +433,7 @@ function genderText(gender: Gender): string {
           <h3>最近保存（本机离线数据）</h3>
           <div class="spacer"></div>
           <span class="badge badge-ok">本次会话新增 {{ savedCount }} 条</span>
+          <span v-if="pendingWrites > 0" class="badge badge-warn">正在写入本机…（{{ pendingWrites }}）</span>
         </div>
         <div v-if="recent.length === 0" class="empty">还没有录入数据</div>
         <div v-else class="table-wrap">
