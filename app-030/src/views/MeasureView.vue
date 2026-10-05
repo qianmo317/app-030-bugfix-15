@@ -33,6 +33,7 @@ const form = reactive({
 const sticky = reactive({ orgUnit: '', gender: 'male' as Gender, batch: '' })
 const notice = ref('')
 const warnText = ref('')
+const errorText = ref('')
 const savedCount = ref(0)
 const saving = ref(false)
 
@@ -170,9 +171,29 @@ async function save(): Promise<void> {
   sticky.batch = person.batch
   savedCount.value += 1
   resetForm()
-  persistProject(current, true)
+  try {
+    // 每条立即落盘；等事务真正提交后才提示“已保存”，写失败则把这条退回表单
+    await persistProject(current, true)
+  } catch (error) {
+    current.persons = current.persons.filter((item) => item.id !== person.id)
+    savedCount.value = Math.max(0, savedCount.value - 1)
+    form.name = person.name
+    form.gender = person.gender
+    form.orgUnit = person.orgUnit
+    form.batch = person.batch
+    form.heightCm = person.heightCm ? formatCm(person.heightCm) : ''
+    form.weightKg = person.weightKg === null ? '' : String(person.weightKg)
+    form.chestCm = person.chestCm ? formatCm(person.chestCm) : ''
+    form.waistCm = person.waistCm ? formatCm(person.waistCm) : ''
+    form.specialFlag = person.specialFlag ?? ''
+    form.note = person.note
+    errorText.value = `本条没有写入本机（${error instanceof Error ? error.message : String(error)}），数据仍在表单里，请重试`
+    saving.value = false
+    return
+  }
   saving.value = false
   notice.value = `第 ${current.persons.length} 条（${person.name}）已保存到本机 IndexedDB，断网也不丢`
+  errorText.value = ''
   if (outcome.status === 'invalid') {
     warnText.value = `已拦截：${outcome.statusReason}；该行记为无效行，不计入有效人数，可在归并页复核`
   } else if (outcome.messages.length > 0) {
@@ -187,16 +208,28 @@ async function save(): Promise<void> {
 async function removePerson(person: Person): Promise<void> {
   const current = project.value
   if (!current) return
+  const previous = current.persons
   current.persons = current.persons.filter((item) => item.id !== person.id)
-  persistProject(current, true)
-  notice.value = `已删除「${person.name}」`
+  try {
+    await persistProject(current, true)
+    notice.value = `已删除「${person.name}」并同步到本机`
+  } catch (error) {
+    // 落盘失败必须撤回内存里的删除，否则提示与刷新后读回不一致
+    current.persons = previous
+    errorText.value = `删除没有写入本机（${error instanceof Error ? error.message : String(error)}），记录已恢复，请重试`
+  }
 }
 
 async function exportFallbackCsv(): Promise<void> {
   const current = project.value
   if (!current) return
   runMerge(current, rule.value)
-  await flushProject(current)
+  try {
+    await flushProject(current)
+  } catch (error) {
+    errorText.value = `还有数据没能写入本机（${error instanceof Error ? error.message : String(error)}），已阻止导出，避免导出文件缺最后几条`
+    return
+  }
   const rows = detailRows({ project: current, rule: rule.value })
   downloadText(
     toCsvText(rows),
@@ -358,6 +391,7 @@ function genderText(gender: Gender): string {
         </form>
 
         <p v-if="notice" class="notice notice-ok" style="margin-top: 12px">{{ notice }}</p>
+        <p v-if="errorText" class="notice notice-error" style="margin-top: 12px">{{ errorText }}</p>
         <p v-if="warnText" class="notice notice-warn" style="margin-top: 12px">{{ warnText }}</p>
         <p v-if="duplicateNames.length" class="notice notice-warn" style="margin-top: 12px">
           检测到可能重复：同名 + 同班级 + 同身高体重 的既有记录「{{ duplicateNames.join('、') }}」。重复行只提示、

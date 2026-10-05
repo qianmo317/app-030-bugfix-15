@@ -53,12 +53,18 @@ async function submit(): Promise<void> {
     errorText.value = '请填写项目名称（如「XX 中学 2026 级校服」）'
     return
   }
-  const project = await createProject({
-    name: form.name,
-    kind: form.kind,
-    batches: parseBatches(form.batches),
-    ruleVersion: form.ruleVersion
-  })
+  let project: Project
+  try {
+    project = await createProject({
+      name: form.name,
+      kind: form.kind,
+      batches: parseBatches(form.batches),
+      ruleVersion: form.ruleVersion
+    })
+  } catch (error) {
+    errorText.value = `项目没有写入本机（${error instanceof Error ? error.message : String(error)}），请重试`
+    return
+  }
   form.name = ''
   message.value = `项目「${project.name}」已创建，规则版本锁定为 ${project.ruleVersion}`
   await router.push(`/measure/${project.id}`)
@@ -68,7 +74,12 @@ async function remove(project: Project): Promise<void> {
   if (!window.confirm(`确认删除项目「${project.name}」及其 ${project.persons.length} 条量体数据？此操作不可恢复。`)) {
     return
   }
-  await deleteProject(project.id)
+  try {
+    await deleteProject(project.id)
+    message.value = `项目「${project.name}」已从本机删除`
+  } catch (error) {
+    errorText.value = `删除没有写入本机（${error instanceof Error ? error.message : String(error)}），项目仍在列表中，请重试`
+  }
 }
 
 function formatTime(value: number): string {

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ensureMerged, flushProject, getProject, getRule, persistProject, store } from '../logic/store'
 import { buildSummary, conservationText } from '../logic/merge'
@@ -12,10 +12,6 @@ const project = computed(() => getProject(route.params.id as string))
 const rule = computed(() => getRule(project.value?.ruleVersion ?? store.rules[0].version))
 
 if (project.value) ensureMerged(project.value)
-
-onMounted(() => {
-  if (project.value) void flushProject(project.value)
-})
 
 const summary = computed(() => (project.value ? buildSummary(project.value, rule.value) : null))
 
@@ -94,7 +90,12 @@ async function remerge(): Promise<void> {
   const current = project.value
   if (!current) return
   ensureMerged(current)
-  await flushProject(current)
+  try {
+    await flushProject(current)
+  } catch (error) {
+    errorText.value = `重新归并的结果没有写入本机（${error instanceof Error ? error.message : String(error)}），请重试`
+    return
+  }
   message.value = `已按规则版本 ${current.ruleVersion} 重新归并 ${current.persons.length} 人，耗时 ${current.perf?.mergeMs ?? 0} ms`
 }
 
@@ -189,6 +190,7 @@ async function submitOverride(): Promise<void> {
     errorText.value = '请填写操作人'
     return
   }
+  const previousResult = target.result
   target.result = {
     sizeCode: code,
     ruleSizeCode: target.result?.ruleSizeCode ?? '',
@@ -201,8 +203,15 @@ async function submitOverride(): Promise<void> {
       at: Date.now()
     }
   }
-  ensureMerged(current)
-  persistProject(current, true)
+  try {
+    ensureMerged(current)
+    await persistProject(current, true)
+  } catch (error) {
+    target.result = previousResult
+    ensureMerged(current)
+    errorText.value = `覆写没有写入本机（${error instanceof Error ? error.message : String(error)}），已恢复原值，请重试`
+    return
+  }
   message.value = `已将「${target.name}」的号型覆写为 ${code}（原因：${overrideForm.reason.trim()}），覆写只改号型归属，不改人数`
   overrideTarget.value = null
 }
@@ -211,14 +220,22 @@ async function revertOverride(person: Person): Promise<void> {
   const current = project.value
   if (!person.result?.manualOverride || !current) return
   const override = person.result.manualOverride
+  const previousResult = person.result
   person.result = {
     sizeCode: person.result.ruleSizeCode || person.result.sizeCode,
     ruleSizeCode: person.result.ruleSizeCode,
     fit: person.result.fit,
     ruleVersion: rule.value.version
   }
-  ensureMerged(current)
-  persistProject(current, true)
+  try {
+    ensureMerged(current)
+    await persistProject(current, true)
+  } catch (error) {
+    person.result = previousResult
+    ensureMerged(current)
+    errorText.value = `撤销覆写没有写入本机（${error instanceof Error ? error.message : String(error)}），已恢复，请重试`
+    return
+  }
   message.value = `已撤销「${person.name}」的覆写（原覆写：${override.sizeCode}，操作人 ${override.by}）`
 }
 
@@ -227,10 +244,20 @@ async function revertOverride(person: Person): Promise<void> {
 async function setSpecial(person: Person, code: string): Promise<void> {
   const current = project.value
   if (!current) return
+  const previousFlag = person.specialFlag
+  const previousNeedsConfirm = person.needsConfirm
   person.specialFlag = code === '' ? null : code
   person.needsConfirm = false
-  ensureMerged(current)
-  persistProject(current, true)
+  try {
+    ensureMerged(current)
+    await persistProject(current, true)
+  } catch (error) {
+    person.specialFlag = previousFlag
+    person.needsConfirm = previousNeedsConfirm
+    ensureMerged(current)
+    errorText.value = `标记没有写入本机（${error instanceof Error ? error.message : String(error)}），已恢复，请重试`
+    return
+  }
   message.value =
     code === ''
       ? `已取消「${person.name}」的特殊体型标记`
@@ -240,11 +267,23 @@ async function setSpecial(person: Person, code: string): Promise<void> {
 async function setStatus(person: Person, status: PersonStatus, reason: string): Promise<void> {
   const current = project.value
   if (!current) return
+  const previousStatus = person.status
+  const previousReason = person.statusReason
+  const previousResult = person.result
   person.status = status
   person.statusReason = status === 'active' ? '' : reason
   if (status !== 'active') person.result = null
-  ensureMerged(current)
-  persistProject(current, true)
+  try {
+    ensureMerged(current)
+    await persistProject(current, true)
+  } catch (error) {
+    person.status = previousStatus
+    person.statusReason = previousReason
+    person.result = previousResult
+    ensureMerged(current)
+    errorText.value = `状态变更没有写入本机（${error instanceof Error ? error.message : String(error)}），已恢复，请重试`
+    return
+  }
   message.value =
     status === 'active'
       ? `已恢复「${person.name}」为有效行（重新计入有效人数）`
@@ -254,9 +293,18 @@ async function setStatus(person: Person, status: PersonStatus, reason: string): 
 async function clearDuplicateFlag(person: Person): Promise<void> {
   const current = project.value
   if (!current) return
+  const previousDuplicate = person.possibleDuplicateOf
+  const previousNeedsConfirm = person.needsConfirm
   person.possibleDuplicateOf = null
   if (!person.anomaly.length) person.needsConfirm = false
-  persistProject(current, true)
+  try {
+    await persistProject(current, true)
+  } catch (error) {
+    person.possibleDuplicateOf = previousDuplicate
+    person.needsConfirm = previousNeedsConfirm
+    errorText.value = `操作没有写入本机（${error instanceof Error ? error.message : String(error)}），已恢复，请重试`
+    return
+  }
   message.value = `已确认「${person.name}」不是重复行，标记已清除（数据未改动）`
 }
 

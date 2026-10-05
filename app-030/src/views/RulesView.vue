@@ -85,7 +85,12 @@ async function overwrite(): Promise<void> {
     errorText.value = invalid
     return
   }
-  await saveRule({ ...cloneRule(form.value), builtin: false })
+  try {
+    await saveRule({ ...cloneRule(form.value), builtin: false })
+  } catch (error) {
+    errorText.value = `规则没有写入本机（${error instanceof Error ? error.message : String(error)}），请重试`
+    return
+  }
   okText.value = `已保存到 ${form.value.version}（该版本未被任何项目引用，可直接修改）`
 }
 
@@ -113,7 +118,12 @@ async function saveAsNew(): Promise<void> {
     builtin: false,
     effectiveFrom: newVersion.effectiveFrom || form.value.effectiveFrom
   }
-  await saveRule(created)
+  try {
+    await saveRule(created)
+  } catch (error) {
+    errorText.value = `规则没有写入本机（${error instanceof Error ? error.message : String(error)}），请重试`
+    return
+  }
   selectedVersion.value = version
   okText.value = `已新建版本 ${version}；既有项目仍按各自锁定的版本解释，结果不变`
 }

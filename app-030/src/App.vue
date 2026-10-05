@@ -5,6 +5,7 @@ import { getProject, initStore, setOperator, store } from './logic/store'
 
 const route = useRoute()
 const operatorDraft = ref(store.operator)
+const operatorError = ref('')
 
 onMounted(async () => {
   await initStore()
@@ -34,7 +35,14 @@ const tabs = computed(() => {
 async function commitOperator(): Promise<void> {
   const name = operatorDraft.value.trim() || '现场录入员'
   operatorDraft.value = name
-  if (name !== store.operator) await setOperator(name)
+  if (name === store.operator) return
+  try {
+    await setOperator(name)
+    operatorError.value = ''
+  } catch (error) {
+    operatorError.value = `操作人未写入本机：${error instanceof Error ? error.message : String(error)}`
+    operatorDraft.value = store.operator
+  }
 }
 </script>
 
@@ -80,6 +88,7 @@ async function commitOperator(): Promise<void> {
         <p v-if="store.error" class="notice notice-error">
           本机存储不可用：{{ store.error }}（数据将无法离线保存，请检查浏览器隐私设置）
         </p>
+        <p v-if="operatorError" class="notice notice-error">{{ operatorError }}</p>
         <RouterView />
       </template>
     </main>

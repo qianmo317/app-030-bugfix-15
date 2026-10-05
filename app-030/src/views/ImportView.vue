@@ -192,7 +192,12 @@ async function confirmImport(): Promise<void> {
     importParseMs: preview.durationMs,
     importRows: preview.counts.total
   }
-  await flushProject(current)
+  try {
+    await flushProject(current)
+  } catch (error) {
+    fileError.value = `导入数据未能写入本机（${error instanceof Error ? error.message : String(error)}），请重试；重试前不要重复导入同一文件`
+    return
+  }
   resultText.value = `导入完成：新增 ${applied.added} 条、更新 ${applied.updated} 条、无效（待确认）${applied.invalid} 条、跳过错误行 ${applied.skipped} 条；文件指纹 ${preview.fingerprint} 已登记，重传同一文件不会重复写入。`
   dryRun.value = null
 }

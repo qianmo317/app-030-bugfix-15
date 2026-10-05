@@ -39,6 +39,8 @@ export type SizeRule = {
   heightRangeCm: { minCm: number; maxCm: number }
   chestRangeCm: { minCm: number; maxCm: number }
   estimate: SizeEstimateConfig
+  /** 乐观并发版本号（IndexedDB 落盘后递增），未持久化的新文档为 0 */
+  rev?: number
   effectiveFrom: string
   note: string
 }
@@ -116,6 +118,8 @@ export type Project = {
   perf?: { mergeMs?: number; mergeCount?: number; importParseMs?: number; importRows?: number }
   createdAt: number
   updatedAt: number
+  /** 乐观并发版本号（IndexedDB 落盘后递增），未持久化的新文档为 0 */
+  rev?: number
 }
 
 export type SummaryRow = { sizeCode: string; gender: Gender; qty: number; isSpecial: boolean }

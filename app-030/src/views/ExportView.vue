@@ -27,6 +27,7 @@ if (project.value) ensureMerged(project.value)
 
 const summary = computed(() => (project.value ? buildSummary(project.value, rule.value) : null))
 const message = ref('')
+const storeError = ref('')
 
 function context() {
   const current = project.value
@@ -52,11 +53,18 @@ async function prepare(): Promise<boolean> {
   const current = project.value
   if (!current) return false
   ensureMerged(current)
-  await flushProject(current)
+  try {
+    await flushProject(current)
+  } catch (error) {
+    message.value = ''
+    storeError.value = `有修改未能写入本机（${error instanceof Error ? error.message : String(error)}），已阻止导出，避免文件与本机数据不一致。请重试导出。`
+    return false
+  }
   return true
 }
 
 function notify(text: string): void {
+  storeError.value = ''
   message.value = text
 }
 
@@ -197,6 +205,7 @@ const genderText = (gender: string): string => (gender === 'male' ? '男' : '女
           <button class="btn" type="button" @click="exportStockCsv">号型分布与备货建议（CSV）</button>
         </div>
         <p v-if="message" class="notice notice-ok" style="margin-top: 10px">{{ message }}</p>
+        <p v-if="storeError" class="notice notice-error" style="margin-top: 10px">{{ storeError }}</p>
         <p class="hint" style="margin-top: 8px">
           导出的下单汇总表与下方「与导出一致的明细」逐行相同；量体明细含号型结果与覆写留痕，可直接打印回贴给学校核对。
         </p>
